@@ -12,8 +12,8 @@ const char* ssid = "Herry Hotspot";
 const char* password = "halwatulinka";
 
 // ====== KONFIGURASI SERVER ======
-String serverControl = "http://192.168.1.109:8000/api/device-control";
-String serverSensor  = "http://192.168.1.109:8000/api/sensors";
+String serverControl = "http://192.168.10.9:8000/api/device-control";
+String serverSensor  = "http://192.168.10.9:8000/api/sensors";
 
 // ====== PIN DEFINISI ======
 #define DHTPIN D7
@@ -26,19 +26,23 @@ String serverSensor  = "http://192.168.1.109:8000/api/sensors";
 
 // ====== OBJEK ======
 DHT dht(DHTPIN, DHTTYPE);
-LiquidCrystal_I2C lcd(0x27, 20, 4);
+LiquidCrystal_I2C lcd(0x26, 20, 4);
 RTC_DS3231 rtc;
 Servo servo1, servo2;
 
 // ====== VARIABEL ======
 unsigned long lastUpdate = 0;
-int updateInterval = 10000; // 10 detik
+int updateInterval = 10000;
 float suhu = 0, kelembapan = 0;
 int cahaya = 0;
 
-String jadwal[10]; // max 10 waktu
+String jadwal[10];
 int jumlahJadwal = 0;
-int batasSuhuKipas = 32; // default 32°C
+int batasSuhuKipas = 32;
+
+bool menyiram = false;
+unsigned long waktuMulaiSiram = 0;
+const unsigned long durasiSiram = 10UL * 60UL * 1000UL; // 10 menit 
 
 void setup() {
   Serial.begin(115200);
@@ -81,8 +85,15 @@ void loop() {
     lastUpdate = millis();
     bacaSensorDanTampilkan();
     kirimDataSensorKeServer();   
-    kendaliOtomatis();
     ambilPerintahDariServer();
+  }
+
+  if (menyiram && (millis() - waktuMulaiSiram >= durasiSiram)) {
+    digitalWrite(RELAY1, HIGH); // matikan pompa
+    menyiram = false;
+    Serial.println("Penyiraman otomatis SELESAI!");
+    lcd.setCursor(0, 3);
+    lcd.print("Siram selesai     ");
   }
 }
 
@@ -108,7 +119,6 @@ void bacaSensorDanTampilkan() {
   lcd.print(cahaya == HIGH ? "Terang" : "Redup");
 }
 
-// === Kirim data sensor ke server Laravel ===
 void kirimDataSensorKeServer() {
   if (WiFi.status() == WL_CONNECTED) {
     WiFiClient client;
@@ -116,13 +126,10 @@ void kirimDataSensorKeServer() {
     http.begin(client, serverSensor);
     http.addHeader("Content-Type", "application/json");
 
-    // ambil waktu dari RTC
     DateTime now = rtc.now();
     char waktu[20];
-    sprintf(waktu, "%04d-%02d-%02d %02d:%02d:%02d",
-            now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
+    sprintf(waktu, "%04d-%02d-%02d %02d:%02d:%02d", now.year(), now.month(), now.day(), now.hour(), now.minute(), now.second());
 
-    // buat JSON body
     StaticJsonDocument<200> doc;
     doc["temperature"] = suhu;
     doc["humidity"] = kelembapan;
@@ -130,7 +137,6 @@ void kirimDataSensorKeServer() {
     doc["measured_at"] = waktu;
 
     String requestBody;
-    Serial.println(requestBody);
     serializeJson(doc, requestBody);
 
     int httpCode = http.POST(requestBody);
@@ -152,11 +158,13 @@ void kendaliOtomatis() {
 
   // === Penyiraman Otomatis ===
   for (int i = 0; i < jumlahJadwal; i++) {
-    if (jadwal[i] == String(currentTime)) {
+    if (!menyiram && jadwal[i] == String(currentTime)) {
       Serial.println("Penyiraman otomatis AKTIF!");
       digitalWrite(RELAY1, LOW); // nyalakan pompa
       lcd.setCursor(0, 3);
       lcd.print("Sirami otomatis!");
+      menyiram = true;
+      waktuMulaiSiram = millis();
       break;
     }
   }
@@ -165,6 +173,9 @@ void kendaliOtomatis() {
   if (suhu > batasSuhuKipas) {
     digitalWrite(RELAY2, LOW);
     Serial.println("Kipas ON (otomatis)");
+  } else {
+    digitalWrite(RELAY2, HIGH);
+    Serial.println("Kipas OFF (otomatis)");
   }
 }
 
@@ -181,24 +192,7 @@ void ambilPerintahDariServer() {
 
       StaticJsonDocument<512> doc;
       DeserializationError error = deserializeJson(doc, payload);
-      if (!error) {
-        // === Relay manual ===
-        int relay1 = doc["relay"][0];
-        int relay2 = doc["relay"][1];
-        digitalWrite(RELAY1, relay1 ? LOW : HIGH);
-        digitalWrite(RELAY2, relay2 ? LOW : HIGH);
-
-        // === Servo ===
-        int servoPos = doc["servo_cover"];
-        if(servoPos){
-          servo1.write(90);
-          servo2.write(90);
-        }else{
-          servo1.write(0);
-          servo2.write(0);
-        }
-
-        // === Jadwal Penyiraman ===
+      if (!error) {   
         jumlahJadwal = 0;
         if (doc.containsKey("schedule")) {
           for (JsonVariant waktu : doc["schedule"].as<JsonArray>()) {
@@ -206,21 +200,36 @@ void ambilPerintahDariServer() {
           }
         }
 
-        // === Batas suhu kipas ===
         if (doc.containsKey("fan_temp_limit")) {
           batasSuhuKipas = doc["fan_temp_limit"];
         }
 
-        lcd.setCursor(0, 3);
-        lcd.print("R1:");
-        lcd.print(relay1);
-        lcd.print(" R2:");
-        lcd.print(relay2);
-        lcd.print(" S:");
-        if(servoPos){
-          lcd.print("Terbuka");
-        }else{
-          lcd.print("Tertutup");
+        bool communication = doc["communication"];
+
+        if (communication) {
+          kendaliOtomatis();
+        } else {
+          int relay1 = doc["relay"][0];
+          int relay2 = doc["relay"][1];
+          digitalWrite(RELAY1, relay1 ? LOW : HIGH);
+          digitalWrite(RELAY2, relay2 ? LOW : HIGH);
+
+          int servoPos = doc["servo_cover"];
+          if (servoPos) {
+            servo1.write(90);
+            servo2.write(90);
+          } else {
+            servo1.write(0);
+            servo2.write(0);
+          }
+
+          lcd.setCursor(0, 3);
+          lcd.print("R1:");
+          lcd.print(relay1);
+          lcd.print(" R2:");
+          lcd.print(relay2);
+          lcd.print(" S:");
+          lcd.print(servoPos ? "Terbuka" : "Tertutup");
         }
       }
     } else {

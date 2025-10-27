@@ -13,13 +13,11 @@ class ReportController extends Controller
         $month = $request->query('month');
         $year = $request->query('year');
 
-        // Ambil data penanaman sesuai bulan dan tahun
         $plantings = Planting::with('growthStages')
             ->whereMonth('planted_at', $month)
             ->whereYear('planted_at', $year)
             ->get();
 
-        // Parameter ketiga adalah array konfigurasi mpdf
         $pdf = Pdf::loadView('pdf.planting-report', [
             'plantings' => $plantings,
             'month' => $month,

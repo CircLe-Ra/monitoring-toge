@@ -24,7 +24,7 @@ new class extends Component {
 ?>
 
 <div class="-mt-4">
-    <h2 class="text-lg font-semibold border p-1 rounded-lg text-center">Laporan Pertumbuhan Toge</h2>
+    <h2 class="text-md py-1 font-semibold border rounded-md text-center">Laporan Pertumbuhan Toge</h2>
 
     <div class="flex items-center justify-between gap-3 mt-2 p-4 rounded-lg border">
         <div>

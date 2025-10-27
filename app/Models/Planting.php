@@ -27,6 +27,9 @@ class Planting extends Model
         if (!$this->planted_at) {
             return 0;
         }
+        if ($this->planted_at->isFuture()) {
+            return 0;
+        }
         $days = Carbon::now()->diffInDays($this->planted_at, true);
         return max(0, $days);
     }
@@ -64,7 +67,10 @@ class Planting extends Model
         if (!$this->planted_at) {
             return null;
         }
+        if ($this->planted_at->isFuture()) {
+            return "0 hari";
+        }
         $diff = $this->planted_at->diff(now());
-        return "{$diff->d} hari {$diff->h} jam";
+        return "{$diff->d} hari";
     }
 }

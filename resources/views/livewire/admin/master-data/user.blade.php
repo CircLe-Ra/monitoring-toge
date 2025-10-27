@@ -121,10 +121,10 @@ class extends Component {
 
 }; ?>
 
-<section class="mt-2">
+<section class="-mt-4">
 
     <flux:modal.trigger name="user-modal">
-        <flux:button variant="primary" class="w-[100px]" size="sm" icon="plus">Tambah</flux:button>
+        <flux:button variant="primary" class="w-full" size="sm" icon="plus">Tambah</flux:button>
     </flux:modal.trigger>
 
     <flux:modal name="user-modal" class="md:w-96" @close="resetBagAndField">

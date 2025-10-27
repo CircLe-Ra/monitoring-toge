@@ -214,7 +214,7 @@ class extends Component {
                     {{-- Status --}}
                     <div class="flex justify-between items-center mt-1 mb-2">
                         @if ($plant->is_ready_to_harvest)
-                            <span class="badge bg-green-600 text-white">✅ Siap Panen</span>
+                            <span class="badge bg-green-700 text-white px-2">✅ Siap Panen</span>
                         @else
                             <span class="badge bg-yellow-500 text-white px-2">🌿 Tahap Pertumbuhan</span>
                         @endif

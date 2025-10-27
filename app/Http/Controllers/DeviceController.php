@@ -14,6 +14,7 @@ class DeviceController extends Controller
         $controls = Device::pluck('state', 'name');
         $schedules = Schedule::where('active', true)->pluck('time');
         $fanLimit = Config::where('key', 'fan_temp_limit')->value('value') ?? 32;
+        $communication = Config::where('key', 'communication')->value('value') ?? '0';
 
         return response()->json([
             'relay' => [
@@ -22,7 +23,8 @@ class DeviceController extends Controller
             ],
             'servo_cover' => $controls['servo_cover'] ?? 0,
             'schedules' => $schedules,
-            'fan_temp_limit' => (int) $fanLimit
+            'fan_temp_limit' => (int) $fanLimit,
+            'communication' => $communication
         ]);
     }
 
