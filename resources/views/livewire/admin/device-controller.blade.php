@@ -16,6 +16,7 @@ class extends Component {
     public bool $communication = false;
     public int $fan_temp_limit = 32;
     public string $schedule = '';
+    public int $watering = 0;
 
     public function boot()
     {
@@ -28,6 +29,7 @@ class extends Component {
         $this->relay2 = Device::where('name', 'relay_2')->value('state') ?? false;
         $this->servo_cover = Device::where('name', 'servo_cover')->value('state') ?? false;
         $this->fan_temp_limit = Config::where('key', 'fan_temp_limit')->value('value') ?? 32;
+        $this->watering = Config::where('key', 'watering')->value('value') ?? 0;
     }
 
     #[On('refreshDevices')]
@@ -86,6 +88,22 @@ class extends Component {
                 'key' => 'fan_temp_limit'
             ], [
                 'value' => $this->fan_temp_limit
+            ]);
+            $this->dispatch('toast', message: 'Berhasil disimpan');
+            $this->dispatch('refreshDevices');
+        }catch (\Exception $e){
+            $this->dispatch('refreshDevices');
+            $this->dispatch('toast', type: 'error', message: 'Gagal menyimpan ' . $e->getMessage());
+        }
+    }
+
+    public function saveWateringTime()
+    {
+        try {
+            Config::updateOrCreate([
+                'key' => 'watering'
+            ], [
+                'value' => $this->watering
             ]);
             $this->dispatch('toast', message: 'Berhasil disimpan');
             $this->dispatch('refreshDevices');
@@ -246,6 +264,16 @@ class extends Component {
                     <flux:input.group>
                         <flux:input :disabled="!$this->communication" class="!focus:outline-none !focus:ring-0" wire:model="schedule" type="time"/>
                         <flux:button :disabled="!$this->communication" icon="save" variant="primary" wire:click="saveSchedule">Simpan</flux:button>
+                    </flux:input.group>
+                    <flux:error name="schedule"/>
+                </flux:field>
+                <flux:separator variant="subtle"/>
+                <flux:field>
+                    <flux:label>Waktu Penyiraman</flux:label>
+                    <flux:description>Atur lama waktu penyiraman.</flux:description>
+                    <flux:input.group>
+                        <flux:input :disabled="!$this->communication" class="!focus:outline-none !focus:ring-0" wire:model="watering" type="number" kbd="Menit"/>
+                        <flux:button :disabled="!$this->communication" icon="save" variant="primary" wire:click="saveWateringTime">Simpan</flux:button>
                     </flux:input.group>
                     <flux:error name="schedule"/>
                 </flux:field>

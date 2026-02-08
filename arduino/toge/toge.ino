@@ -12,15 +12,15 @@ const char* ssid = "Herry Hotspot";
 const char* password = "halwatulinka";
 
 // ====== KONFIGURASI SERVER ======
-String serverControl = "http://192.168.10.9:8000/api/device-control";
-String serverSensor  = "http://192.168.10.9:8000/api/sensors";
+String serverControl = "http://192.168.100.101:8000/api/device-control";
+String serverSensor  = "http://192.168.100.101:8000/api/sensors";
 
 // ====== PIN DEFINISI ======
 #define DHTPIN D7
 #define DHTTYPE DHT22
 #define LDRPIN D0
-#define RELAY1 D3   // Pompa Air
-#define RELAY2 D4   // Kipas
+#define RELAY1 D3   //Kipas
+#define RELAY2 D4   // Pompa Air
 #define SERVO1PIN D5
 #define SERVO2PIN D6
 
@@ -42,7 +42,7 @@ int batasSuhuKipas = 32;
 
 bool menyiram = false;
 unsigned long waktuMulaiSiram = 0;
-const unsigned long durasiSiram = 10UL * 60UL * 1000UL; // 10 menit 
+unsigned long durasiSiram = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -90,6 +90,7 @@ void loop() {
 
   if (menyiram && (millis() - waktuMulaiSiram >= durasiSiram)) {
     digitalWrite(RELAY1, HIGH); // matikan pompa
+    digitalWrite(RELAY2, HIGH); // matikan kipas 
     menyiram = false;
     Serial.println("Penyiraman otomatis SELESAI!");
     lcd.setCursor(0, 3);
@@ -158,9 +159,11 @@ void kendaliOtomatis() {
 
   // === Penyiraman Otomatis ===
   for (int i = 0; i < jumlahJadwal; i++) {
+    
     if (!menyiram && jadwal[i] == String(currentTime)) {
       Serial.println("Penyiraman otomatis AKTIF!");
       digitalWrite(RELAY1, LOW); // nyalakan pompa
+      digitalWrite(RELAY2, LOW); // nyalakan kipas
       lcd.setCursor(0, 3);
       lcd.print("Sirami otomatis!");
       menyiram = true;
@@ -170,13 +173,13 @@ void kendaliOtomatis() {
   }
 
   // === Kipas Otomatis ===
-  if (suhu > batasSuhuKipas) {
-    digitalWrite(RELAY2, LOW);
-    Serial.println("Kipas ON (otomatis)");
-  } else {
-    digitalWrite(RELAY2, HIGH);
-    Serial.println("Kipas OFF (otomatis)");
-  }
+  // if (suhu > batasSuhuKipas) {
+  //   digitalWrite(RELAY2, LOW);
+  //   Serial.println("Kipas ON (otomatis)");
+  // } else {
+  //   digitalWrite(RELAY2, HIGH);
+  //   Serial.println("Kipas OFF (otomatis)");
+  // }
 }
 
 void ambilPerintahDariServer() {
@@ -194,8 +197,8 @@ void ambilPerintahDariServer() {
       DeserializationError error = deserializeJson(doc, payload);
       if (!error) {   
         jumlahJadwal = 0;
-        if (doc.containsKey("schedule")) {
-          for (JsonVariant waktu : doc["schedule"].as<JsonArray>()) {
+        if (doc.containsKey("schedules")) {
+          for (JsonVariant waktu : doc["schedules"].as<JsonArray>()) {
             jadwal[jumlahJadwal++] = waktu.as<String>();
           }
         }
@@ -204,9 +207,16 @@ void ambilPerintahDariServer() {
           batasSuhuKipas = doc["fan_temp_limit"];
         }
 
-        bool communication = doc["communication"];
+        if (doc.containsKey("watering")) {
+          durasiSiram = (unsigned long) doc["watering"] * 60UL * 1000UL;
 
-        if (communication) {
+          Serial.print("Durasi siram (ms): ");
+          Serial.println(durasiSiram);
+        }
+
+        String communication = doc["communication"];
+
+        if (communication == "1") {
           kendaliOtomatis();
         } else {
           int relay1 = doc["relay"][0];
